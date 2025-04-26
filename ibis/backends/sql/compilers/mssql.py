@@ -278,6 +278,14 @@ class MSSQLCompiler(SQLGlotCompiler):
     def visit_Xor(self, op, *, left, right):
         return sg.and_(sg.or_(left, right), sg.not_(sg.and_(left, right)))
 
+    def visit_And(self, op, *, left, right):
+        # emit numeric boolean for AND
+        return self.if_(sg.and_(left, right), 1, 0)
+
+    def visit_Or(self, op, *, left, right):
+        # emit numeric boolean for OR
+        return self.if_(sg.or_(left, right), 1, 0)
+
     def visit_TimestampBucket(self, op, *, arg, interval, offset):
         interval_units = {
             "ms": "millisecond",
@@ -552,6 +560,14 @@ class MSSQLCompiler(SQLGlotCompiler):
                 length,
             ),
         )
+
+    def visit_IfElse(self, op, *, bool_expr, true_expr, false_null_expr):
+        # Use MSSQL's IIF for boolean branching everywhere
+        node = self.f.iif(bool_expr, true_expr, false_null_expr)
+        # Preserve boolean dtype => cast to boolean triggers the numeric IIF pattern
+        if op.dtype.is_boolean():
+            return self.cast(node, dt.boolean)
+        return node
 
 
 compiler = MSSQLCompiler()
